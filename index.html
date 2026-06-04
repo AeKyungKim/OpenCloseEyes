@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>인공지능 자세 판별기</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* 전체 페이지 스타일 설정 */
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background: linear-gradient(135deg, #1e1e2f, #2a2a40); /* 고급스러운 다크 그라데이션 배경 */
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        /* 큰 제목 스타일 */
+        h1 {
+            font-size: 2.8rem;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #ff6b6b, #feca57); /* 텍스트 그라데이션 */
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0px 4px 10px rgba(255, 107, 107, 0.3);
+            text-align: center;
+        }
+
+        /* 부제목 스타일 */
+        .subtitle {
+            color: #a4b0be;
+            margin-bottom: 30px;
+            font-size: 1.1rem;
+            letter-spacing: 1px;
+        }
+
+        /* 시작 버튼 스타일 */
+        button {
+            background: linear-gradient(45deg, #0984e3, #00cec9);
+            color: white;
+            border: none;
+            padding: 12px 40px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 206, 201, 0.4);
+            transition: all 0.3s ease; /* 부드러운 애니메이션 효과 */
+            margin-bottom: 30px;
+        }
+
+        button:hover {
+            transform: translateY(-3px) scale(1.05); /* 마우스 오버시 살짝 커짐 */
+            box-shadow: 0 6px 20px rgba(0, 206, 201, 0.7);
+        }
+
+        /* 웹캠 화면 컨테이너 스타일 */
+        #webcam-container {
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+            border: 4px solid #3d3d5c;
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 200px;
+            height: 200px;
+            margin-bottom: 30px;
+        }
+
+        /* 결과 라벨 컨테이너 스타일 */
+        #label-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 100%;
+            max-width: 300px;
+        }
+
+        /* 개별 결과 박스 스타일 (동적 생성됨) */
+        #label-container div {
+            background: rgba(255, 255, 255, 0.1); /* 반투명 유리 효과 */
+            padding: 15px 20px;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            transition: background 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>인공지능 자세 판별기</h1>
+    <div class="subtitle">Teachable Machine Image Model</div>
+    
+    <button type="button" onclick="init()">Start</button>
+    
+    <div id="webcam-container"></div>
+    <div id="label-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <script type="text/javascript">
+        const URL = "https://teachablemachine.withgoogle.com/models/pGLHlmc0n/";
+
+        let model, webcam, labelContainer, maxPredictions;
+
+        //1. 버튼을 누르면 처음 실행되는 init() 함수
+        async function init() {
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
+
+            model = await tmImage.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+            
+            const flip = true; 
+            webcam = new tmImage.Webcam(200, 200, flip); 
+            await webcam.setup(); 
+            await webcam.play();
+
+            //2.loop함수 동작을 잠깐 예약 - 화면이 갱신될때 loop()함수를 실행해달라고 예약 
+            window.requestAnimationFrame(loop);
+
+            //3.버튼을 클릭한뒤 동적으로 div 상자가 추가됨.
+            document.getElementById("webcam-container").appendChild(webcam.canvas);
+            labelContainer = document.getElementById("label-container");
+            for (let i = 0; i < maxPredictions; i++) { // and class labels
+                labelContainer.appendChild(document.createElement("div"));
+            }
+        }
+
+        //8. 다시 돌아와서 무한반복
+        //4. requestAnimationFrame 예약한 loop 함수가 실행됨.
+        async function loop() {
+            webcam.update(); 
+            
+            //5.predict 함수가 호출됨
+            await predict();
+            //7.loop  함수 안에서 또다른 loop 함수를 호출하면서
+            //브라우저를 끄기 전까지 계속 무한루프를 반복함.
+            window.requestAnimationFrame(loop);
+        }
+
+        async function predict() {
+            //6. 모델이 웹캠의 화면을 예측하는 중요 동작 구현부
+            const prediction = await model.predict(webcam.canvas);
+
+            for (let i = 0; i < maxPredictions; i++) {
+                const classPrediction =
+                    prediction[i].className + ": " + Math.round(prediction[i].probability * 100) + "%";
+                labelContainer.childNodes[i].innerHTML = classPrediction;
+            }
+        }
+    </script>
+</body>
+</html>
